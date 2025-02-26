@@ -1,181 +1,321 @@
 #!/bin/bash
+# HomeDock OS Installer 1.0.32
+set -e
 
-anim_t() {
-  TEXT=$1
-  CMD=$2
+# [===================================================================================================]
+#                                           Script Functions
+# [===================================================================================================]
+
+# Print a blank line
+clrf() {
+  printf "\n"
+}
+
+# Spinner animation for background tasks
+animate_blink() {
+  local TEXT=$1
+  local CMD=$2
   (eval "$CMD" >/dev/null 2>&1) &
-  CMD_PID=$!
-  chars="/-\\|"
-  echo -n "$TEXT "
-  while [ -d /proc/$CMD_PID ]; do
-    for i in {0..3}; do
-      char=${chars:i:1}
-      echo -ne "\\r $char $TEXT"
-      sleep 0.2
+  local CMD_PID=$!
+  local chars="/-\\|"
+  printf "%s " "$TEXT"
+  while kill -0 $CMD_PID 2>/dev/null; do
+    for ((i = 0; i < ${#chars}; i++)); do
+      printf "\\r %s %s" "${chars:i:1}" "$TEXT"
+      sleep 0.1
     done
   done
-  echo -e "\\r ✓ $TEXT          "
   wait $CMD_PID
+  printf "\\r ✓ %s\n" "$TEXT"
 }
 
-# Verify and install apt package
-package_exists_and_anim() {
-  package=$1
-  text=$2
+# Check and install apt packages
+package_exists() {
+  local package=$1
+  local text=$2
 
-  dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -q "install ok installed"
-  if [ $? -eq 0 ]; then
-    echo " ✓ $text is already installed"
+  if dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -q "install ok installed"; then
+    printf " ✓ %s is already installed\n" "$text"
   else
-    anim_t "Installing $text..." "sudo apt-get install -y $package"
+    animate_blink "Installing $text..." "sudo apt-get install -y $package"
   fi
 }
 
-# Verify and install git
+# Detect distribution and set Docker package accordingly
+detect_distro() {
+  if [ -f /etc/os-release ]; then
+    . /etc/os-release
+    printf " ✓ Detected Linux distribution: %s\n" "$PRETTY_NAME"
+    case "$ID" in
+    ubuntu) DOCKER_PKG="docker.io" ;;
+    debian) DOCKER_PKG="docker" ;;
+    *)
+      clrf
+      printf " ! This installer has been tested only on Debian and Ubuntu distributions.\n"
+      printf " i The installation *may fail* or cause unexpected behavior.\n"
+      printf " ? Do you still want to continue? (Y/N): "
+      read -r response
+      if [[ ! "$response" =~ ^[Yy]$ ]]; then
+        clrf
+        printf " x Installation aborted by user due to unsupported distribution.\n"
+        clrf
+        exit 1
+      fi
+      DOCKER_PKG="docker"
+      clrf
+      printf " ✓ Proceeding with installation on unsupported distribution: %s\n" "$PRETTY_NAME"
+      clrf
+      ;;
+    esac
+  else
+    printf " i We couldn't detect your actual distribution because /etc/os-release was not found.\n"
+    printf " i The installation *may fail* or cause unexpected behavior.\n"
+    printf " ? Do you still want to continue? (Y/N): "
+    read -r response
+    if [[ ! "$response" =~ ^[Yy]$ ]]; then
+      clrf
+      printf " x Installation aborted by user due to unknown distribution.\n"
+      clrf
+      exit 1
+    fi
+    DOCKER_PKG="docker"
+    clrf
+    printf " ✓ Proceeding with installation.\n"
+  fi
+}
+
+# Prompt user with timeout and countdown animation
+prompt_with_timeout() {
+  local timeout=10
+  clrf
+  printf " i The following dependencies will be installed locally if not found: \n * git, %s, docker-compose, python3, python3-pip, python3-venv\n\n" "$DOCKER_PKG"
+
+  for ((i = timeout; i > 0; i--)); do
+    printf "\\r ? Do you want to proceed? (Y/N) [Auto-Yes in %2d seconds]:" "$i"
+    read -t 1 -n 1 response && break
+  done
+  printf "\\n"
+
+  response=${response:-y}
+  if [[ ! "$response" =~ ^[Yy]$ ]]; then
+    clrf
+    printf " ! Installation aborted by user.\n\n"
+    exit 1
+  fi
+}
+
+# Check and install git
 install_git() {
   if ! command -v git &>/dev/null; then
-    anim_t "Installing Git..." "sudo apt-get install -y git"
+    animate_blink "Installing Git..." "sudo apt-get install -y git"
   else
-    echo " ✓ Git is already installed"
+    printf " ✓ Git is already installed\n"
   fi
 }
 
-# Check if sudo is installed
-if ! command -v sudo &>/dev/null; then
-  echo "Error: sudo is not installed. Please install sudo and try again."
-  exit 1
-fi
-
-# Check if user has sudo privileges
-if ! sudo -n true 2>/dev/null; then
-  echo "You must have sudo privileges to run this script."
-  sudo -v || exit 1
-fi
-
-echo "                                      "
-echo "                                      "
-echo "            @@@@@@@@@@@@@@@@@@@@@@@@  "
-echo "           @@@@@@@@@@@@@@@@@@@@@@@@@  "
-echo "          @@@@                        "
-echo "         @@@@   @@@@@@@@@@@@@@@@@@@@  "
-echo "        @@@@   @@@                    "
-echo "        @@@   @@@   @@@@@@@@@@@@@     "
-echo "       @@@   @@@*  @@@@      @@@*  @  "
-echo "      @@@   @@@@  @@@@      @@@@  @@  "
-echo "     @@@*  @@@@  (@@@      @@@@@@@@@  "
-echo "    @@@@  @@@@   @@@      //////////  "
-echo "   @@@@  @@@@   @@@                   "
-echo "  @@@@  #@@@   @@@                    "
-echo " @@@@   @@@   @@@                     "
-echo "                                      "
-echo " ⌂ Installing HomeDock OS...               "
-echo ""
-echo " i Sit back and relax... It may take a while!"
-echo ""
-
-# Get current directory
-CURRENT_DIR=$(pwd)
-echo " i Current path:"
-echo "   $CURRENT_DIR"
-echo ""
-
-# Install git
-install_git
-
-# Download HomeDock OS Repository from GitHub
-anim_t "Downloading HomeDock OS Repository from GitHub " "git clone https://github.com/BansheeTech/HomeDockOS.git"
-
-# Check if HomeDock OS folder exists
-cd HomeDockOS || {
-  echo "HomeDock OS folder not found"
-  exit 1
+# Check sudo availability
+check_sudo() {
+  if ! command -v sudo &>/dev/null; then
+    clrf
+    printf " ✗ Error: sudo is not installed. Please install sudo and try again.\n"
+    exit 1
+  fi
+  if ! sudo -n true 2>/dev/null; then
+    clrf
+    printf " i You must have sudo privileges to run this script.\n"
+    sudo -v || exit 1
+  fi
 }
-echo " ✓ Switching to $CURRENT_DIR/HomeDockOS Directory..."
-echo ""
 
-BIN_DIR=$(pwd)
-echo " i Installation path:"
-echo "   $BIN_DIR"
-echo ""
+# Install pip dependencies with per-package feedback
+install_pip_dependencies() {
+  if [ ! -f "requirements.txt" ]; then
+    clrf
+    printf " ! requirements.txt not found. Ensure it exists in the HomeDockOS directory.\n"
+    exit 1
+  fi
 
-# Python Virtual Environment Path
-VENV_PATH="$BIN_DIR/venv"
-echo " i Python Virtual Environment Path:"
-echo "   $VENV_PATH"
-echo ""
+  while IFS= read -r package || [ -n "$package" ]; do
+    if [[ -n "$package" && ! "$package" =~ ^# ]]; then
+      animate_blink "Installing $package" "venv/bin/pip install $package"
+    fi
+  done <requirements.txt
+}
 
-echo " i Checking and installing apt dependencies..."
+display_logo() {
+  cat <<"EOF"
 
-# Install apt dependencies
-package_exists_and_anim "docker" "Docker"
-package_exists_and_anim "docker-compose" "Docker-Compose"
-package_exists_and_anim "python3" "Python3"
-package_exists_and_anim "python3-pip" "PIP"
-package_exists_and_anim "python3-venv" "Python3-Venv"
+            @@@@@@@@@@@@@@@@@@@@@@@@  
+           @@@@@@@@@@@@@@@@@@@@@@@@@  
+          @@@@                        
+         @@@@   @@@@@@@@@@@@@@@@@@@@  
+        @@@@   @@@                    
+        @@@   @@@   @@@@@@@@@@@@@     
+       @@@   @@@*  @@@@      @@@*  @  
+      @@@   @@@@  @@@@      @@@@  @@  
+     @@@*  @@@@  (@@@      @@@@@@@@@  
+    @@@@  @@@@   @@@      //////////  
+   @@@@  @@@@   @@@                   
+  @@@@  #@@@   @@@                    
+ @@@@   @@@   @@@                     
 
-echo ""
-echo " i Setting up Python virtual environment..."
+EOF
+  printf " ⌂ Installing HomeDock OS...\n"
+  printf " i Sit back and relax... It may take a while!\n"
+  clrf
+}
 
-# Create Python virtual environment
-if [ ! -d "venv" ]; then
-  anim_t "Creating Python virtual environment..." "python3 -m venv venv"
-else
-  echo " ✓ Python virtual environment already exists"
-fi
+# Prompt user and handle full service installation logic
+prompt_service_installation() {
+  local VENV_PATH=$1
+  local WORK_DIR=$2
+  local CURRENT_DIR=$3
+  local timeout=10
+  local SERVICE_PATH="$CURRENT_DIR/HomeDockOS/homedock.service"
 
-echo ""
-echo " i Checking and installing pip dependencies..."
+  printf " i HomeDock OS can be configured to auto-start on boot.\n"
+  printf " i This will create a service in /etc/systemd/system\n"
 
-anim_t "Installing dependencies..." "venv/bin/pip install -r requirements.txt"
+  cat <<EOF >"$SERVICE_PATH"
+[Unit]
+Description=HomeDock Auto-Boot Service
+After=network.target
 
-# Generate HomeDock OS service file
-echo ""
-echo " i Generating HomeDock OS service file..."
-echo "[Unit]" >homedock.service
-echo "Description=HomeDock Auto-Boot Service" >>homedock.service
-echo "After=network.target" >>homedock.service
-echo "[Service]" >>homedock.service
-echo "User=root" >>homedock.service
-echo "TimeoutStartSec=60" >>homedock.service
-echo "WorkingDirectory=${BIN_DIR}" >>homedock.service
-echo "ExecStartPre=/bin/sleep 15" >>homedock.service
-echo "ExecStart=$VENV_PATH/bin/python3 \"${BIN_DIR}/homedock.py\"" >>homedock.service
-echo "Restart=always" >>homedock.service
-echo "[Install]" >>homedock.service
-echo "WantedBy=multi-user.target" >>homedock.service
+[Service]
+User=root
+TimeoutStartSec=60
+WorkingDirectory=$WORK_DIR
+ExecStartPre=/bin/sleep 15
+ExecStart=$VENV_PATH/bin/python3 "$WORK_DIR/homedock.py"
+Restart=always
 
-# Check if service file exists
-echo ""
-echo " i Checking if service file exists..."
-if [ -e "homedock.service" ]; then
-  echo "   File exists! Copying it to /etc/systemd/system/..."
-  sudo cp homedock.service /etc/systemd/system/
-else
-  echo "   File doesn't exists! Stopping generation..."
-  exit 0
-fi
+[Install]
+WantedBy=multi-user.target
+EOF
 
-# Enable HomeDock OS service
-echo ""
-echo " i Checking if HomeDock OS service is ready..."
-if [ -e "/etc/systemd/system/homedock.service" ]; then
-  echo "   Service exists!"
-  sudo systemctl enable homedock.service
-else
-  echo "   Service doesn't exists! Stopping generation..."
-  exit 0
-fi
+  clrf
+  for ((i = timeout; i > 0; i--)); do
+    printf "\r ? Do you want to install and enable the service? (Y/N) [Auto-Yes in %2d seconds]:" "$i"
+    read -t 1 -n 1 response && break
+  done
+  printf "\n"
 
-# Disclaimer HomeDock OS Running from Command Line
-echo ""
-echo " i We're running HomeDock OS from the command line for the first time!"
-echo " i Modify your settings by logging in first then restart"
-echo ""
-echo " i Manually run HomeDock OS using the following command"
-echo "   sudo $VENV_PATH/bin/python3 $BIN_DIR/homedock.py"
-echo ""
-echo " i If you reboot HomeDock OS service will autostart!"
-echo ""
+  response=${response:-y}
+  if [[ "$response" =~ ^[Yy]$ ]]; then
+    clrf
+    printf " i Copying service file to /etc/systemd/system/...\n"
+    sudo cp "$SERVICE_PATH" /etc/systemd/system/
+    sudo systemctl enable homedock.service
+    printf " ✓ HomeDock OS service has been enabled and will start at boot!\n"
+  else
+    clrf
+    printf " ! Skipping service installation as per user choice.\n"
+    printf " i You can manually enable it later with:\n"
+    printf "     sudo cp \"$SERVICE_PATH\" /etc/systemd/system/\n"
+    printf "     sudo systemctl enable homedock.service && sudo systemctl start homedock.service\n"
+  fi
+}
 
-# Run HomeDock OS
-sudo $VENV_PATH/bin/python3 $BIN_DIR/homedock.py
+# Verify Python virtual environment creation
+check_virtualenv_created() {
+  local VENV_PATH=$1
+  if [ ! -d "$VENV_PATH" ]; then
+    printf " ! Error: Virtual environment creation failed at %s.\n" "$VENV_PATH"
+    exit 1
+  fi
+}
+
+# Verify network connection
+check_network_connection() {
+  if ! ping -c 1 github.com &>/dev/null; then
+    printf " ! Error: No network connection. Please check your Internet.\n"
+    exit 1
+  fi
+}
+
+# Handle git clone with animation
+handle_repo_clone() {
+  if [ -d "HomeDockOS" ]; then
+    clrf
+    printf " ! HomeDockOS directory already exists. Do you want to re-create it? All data will be erased! (Y/N): "
+    read -r response
+    if [[ "$response" =~ ^[Yy]$ ]]; then
+      rm -rf HomeDockOS
+      animate_blink "Re-cloning HomeDock OS Repository from GitHub" \
+        "git clone https://github.com/BansheeTech/HomeDockOS.git"
+    else
+      clrf
+      printf " ✗ Coulnd't proceed because HomeDockOS folder already exists.\n"
+      clrf
+      exit 1
+    fi
+  else
+    animate_blink "Downloading HomeDock OS Repository from GitHub" \
+      "git clone https://github.com/BansheeTech/HomeDockOS.git"
+  fi
+}
+
+# [===================================================================================================]
+#                                             Main Logic
+# [===================================================================================================]
+
+main() {
+  display_logo
+  check_sudo
+  detect_distro
+  check_network_connection
+
+  local CURRENT_DIR=$(pwd)
+  printf " ✓ HomeDock OS Installation Path: %s\n" "$CURRENT_DIR"
+
+  prompt_with_timeout
+
+  install_git
+
+  handle_repo_clone
+
+  cd HomeDockOS || {
+    clrf
+    printf " ✗ HomeDock OS folder not found\n"
+    exit 1
+  }
+
+  printf " ✓ Switched to %s Directory...\n" "$(pwd)"
+  clrf
+
+  printf " i Checking and installing apt dependencies...\n"
+  for pkg in "$DOCKER_PKG" docker-compose python3 python3-pip python3-venv; do
+    package_exists "$pkg" "${pkg^}"
+  done
+
+  clrf
+
+  local VENV_PATH="$(pwd)/venv"
+  printf " i Python Virtual Environment Path: %s\n" "$VENV_PATH"
+
+  printf " i Setting up Python virtual environment...\n"
+  [ ! -d "venv" ] && animate_blink "Creating Python virtual environment..." "python3 -m venv venv" || printf " ✓ Python virtual environment already exists\n"
+  clrf
+
+  check_virtualenv_created "$VENV_PATH"
+
+  if [ ! -f "requirements.txt" ]; then
+    clrf
+    printf " ✗ requirements.txt not found. Ensure it exists in the HomeDockOS directory.\n"
+    exit 1
+  fi
+
+  printf " i Installing Python dependencies...\n"
+  install_pip_dependencies
+  clrf
+
+  prompt_service_installation "$VENV_PATH" "$(pwd)" "$CURRENT_DIR"
+
+  clrf
+  printf "\033[1;30;47m ✓ Running HomeDock OS for the first time! \033[0m\n"
+  clrf
+
+  sudo $VENV_PATH/bin/python3 "$(pwd)/homedock.py"
+}
+
+main
