@@ -91,22 +91,21 @@ prompt_with_select() {
   printf " * git, %s, docker-compose, python3, python3-pip, python3-venv\n\n" "$DOCKER_PKG"
 
   echo " ? Do you want to proceed? Select an option:"
-  select choice in "Yes" "No"; do
-    case $choice in
+  select response in "Yes" "No"; do
+    case $response in
     Yes)
       printf " ✓ Proceeding with installation...\n"
       break
       ;;
     No)
-      clrf
-      printf " ! Installation aborted by user.\n\n"
+      printf " ✗ Installation aborted by user.\n"
       exit 1
       ;;
     *)
       printf " ! Invalid option. Please select 1 or 2.\n"
       ;;
     esac
-  done
+  done </dev/tty
 }
 
 # Check and install git
