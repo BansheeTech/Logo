@@ -90,13 +90,27 @@ prompt_with_timeout() {
   clrf
   printf " i The following dependencies will be installed locally if not found: \n * git, %s, docker-compose, python3, python3-pip, python3-venv\n\n" "$DOCKER_PKG"
 
-  for ((i = timeout; i > 0; i--)); do
-    printf "\\r ? Do you want to proceed? (Y/N) [Auto-Yes in %2d seconds]:" "$i"
-    read -t 1 -n 1 response && break
-  done
-  printf "\\n"
+  printf "\r ? Do you want to proceed? (Y/N) [Auto-Yes in %2d seconds]:" "$timeout"
 
-  response=${response:-y}
+  (
+    for ((i = timeout - 1; i >= 0; i--)); do
+      sleep 1
+      printf "\r ? Do you want to proceed? (Y/N) [Auto-Yes in %2d seconds]:" "$i"
+    done
+  ) &
+
+  read -t $timeout -n 1 response
+  local read_exit=$?
+
+  kill $! 2>/dev/null
+  wait $! 2>/dev/null
+
+  if [[ $read_exit -gt 128 ]]; then
+    response="y"
+  fi
+
+  printf "\n"
+
   if [[ ! "$response" =~ ^[Yy]$ ]]; then
     clrf
     printf " ! Installation aborted by user.\n\n"
