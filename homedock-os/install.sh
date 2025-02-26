@@ -85,37 +85,28 @@ detect_distro() {
 }
 
 # Prompt user with timeout and countdown animation
-prompt_with_timeout() {
-  local timeout=10
+prompt_with_select() {
   clrf
-  printf " i The following dependencies will be installed locally if not found: \n * git, %s, docker-compose, python3, python3-pip, python3-venv\n\n" "$DOCKER_PKG"
+  printf " i The following dependencies will be installed locally if not found:\n"
+  printf " * git, %s, docker-compose, python3, python3-pip, python3-venv\n\n" "$DOCKER_PKG"
 
-  printf "\r ? Do you want to proceed? (Y/N) [Auto-Yes in %2d seconds]:" "$timeout"
-
-  (
-    for ((i = timeout - 1; i >= 0; i--)); do
-      sleep 1
-      printf "\r ? Do you want to proceed? (Y/N) [Auto-Yes in %2d seconds]:" "$i"
-    done
-  ) &
-
-  read -t $timeout -n 1 response
-  local read_exit=$?
-
-  kill $! 2>/dev/null
-  wait $! 2>/dev/null
-
-  if [[ $read_exit -gt 128 ]]; then
-    response="y"
-  fi
-
-  printf "\n"
-
-  if [[ ! "$response" =~ ^[Yy]$ ]]; then
-    clrf
-    printf " ! Installation aborted by user.\n\n"
-    exit 1
-  fi
+  echo " ? Do you want to proceed? Select an option:"
+  select choice in "Yes" "No"; do
+    case $choice in
+    Yes)
+      printf " ✓ Proceeding with installation...\n"
+      break
+      ;;
+    No)
+      clrf
+      printf " ! Installation aborted by user.\n\n"
+      exit 1
+      ;;
+    *)
+      printf " ! Invalid option. Please select 1 or 2.\n"
+      ;;
+    esac
+  done
 }
 
 # Check and install git
@@ -282,7 +273,7 @@ main() {
   local CURRENT_DIR=$(pwd)
   printf " ✓ HomeDock OS Installation Path: %s\n" "$CURRENT_DIR"
 
-  prompt_with_timeout
+  prompt_with_select
 
   install_git
 
