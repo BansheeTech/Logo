@@ -6,7 +6,7 @@ set -e
 #                                           Script Functions
 # [===================================================================================================]
 
-# Print a blank line
+# Print a blank line :3
 clrf() {
   printf "\n"
 }
@@ -43,6 +43,7 @@ package_exists() {
 
 # Detect distribution and set Docker package accordingly
 detect_distro() {
+  local timeout=10
   if [ -f /etc/os-release ]; then
     . /etc/os-release
     printf " ✓ Detected Linux distribution: %s\n" "$PRETTY_NAME"
@@ -53,8 +54,15 @@ detect_distro() {
       clrf
       printf " ! This installer has been tested only on Debian and Ubuntu distributions.\n"
       printf " i The installation *may fail* or cause unexpected behavior.\n"
-      printf " ? Do you still want to continue? (Y/N): "
-      read -r response
+
+      for ((i = timeout; i > 0; i--)); do
+        printf "\r ? Do you still want to continue? (Y/N) [Auto-No in %2d seconds]:" "$i"
+        read -t 1 -n 1 response </dev/tty && break
+      done
+      printf "\n"
+
+      response=${response:-n}
+
       if [[ ! "$response" =~ ^[Yy]$ ]]; then
         clrf
         printf " x Installation aborted by user due to unsupported distribution.\n"
@@ -70,8 +78,15 @@ detect_distro() {
   else
     printf " i We couldn't detect your actual distribution because /etc/os-release was not found.\n"
     printf " i The installation *may fail* or cause unexpected behavior.\n"
-    printf " ? Do you still want to continue? (Y/N): "
-    read -r response
+
+    for ((i = timeout; i > 0; i--)); do
+      printf "\r ? Do you still want to continue? (Y/N) [Auto-No in %2d seconds]:" "$i"
+      read -t 1 -n 1 response </dev/tty && break
+    done
+    printf "\n"
+
+    response=${response:-n}
+
     if [[ ! "$response" =~ ^[Yy]$ ]]; then
       clrf
       printf " x Installation aborted by user due to unknown distribution.\n"
@@ -197,11 +212,12 @@ EOF
   clrf
   for ((i = timeout; i > 0; i--)); do
     printf "\r ? Do you want to install and enable the service? (Y/N) [Auto-Yes in %2d seconds]:" "$i"
-    read -t 1 -n 1 response && break
+    read -t 1 -n 1 response </dev/tty && break
   done
   printf "\n"
 
   response=${response:-y}
+
   if [[ "$response" =~ ^[Yy]$ ]]; then
     clrf
     printf " i Copying service file to /etc/systemd/system/...\n"
@@ -236,17 +252,26 @@ check_network_connection() {
 
 # Handle git clone with animation
 handle_repo_clone() {
+  local timeout=10
   if [ -d "HomeDockOS" ]; then
     clrf
-    printf " ! HomeDockOS directory already exists. Do you want to re-create it? All data will be erased! (Y/N): "
-    read -r response
+    printf " ! HomeDockOS directory already exists.\n"
+
+    for ((i = timeout; i > 0; i--)); do
+      printf "\r ? Do you want to re-create it? All data will be erased! (Y/N) [Auto-No in %2d seconds]:" "$i"
+      read -t 1 -n 1 response </dev/tty && break
+    done
+    printf "\n"
+
+    response=${response:-n}
+
     if [[ "$response" =~ ^[Yy]$ ]]; then
       rm -rf HomeDockOS
       animate_blink "Re-cloning HomeDock OS Repository from GitHub" \
         "git clone https://github.com/BansheeTech/HomeDockOS.git"
     else
       clrf
-      printf " ✗ Coulnd't proceed because HomeDockOS folder already exists.\n"
+      printf " ✗ Couldn't proceed because HomeDockOS folder already exists.\n"
       clrf
       exit 1
     fi
