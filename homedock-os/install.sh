@@ -112,7 +112,7 @@ enable_interactive_timing() {
   if [[ -f "$temp_file" ]]; then
     response=$(<"$temp_file")
     rm "$temp_file"
-    printf "\n ! Timeout reached. Auto-selecting '%s'...\n" "$default_response"
+    printf "\n ⏰ Timeout reached. Auto-selecting '%s'...\n" "$default_response"
   fi
 
   clrf
@@ -122,15 +122,12 @@ enable_interactive_timing() {
 # Prompt user with timeout and countdown animation
 prompt_with_timeout() {
   local timeout=10
-  local response
+  clrf
+  printf " i The following dependencies will be installed locally if not found: \n * git, %s, docker-compose, python3, python3-pip, python3-venv\n\n" "$DOCKER_PKG"
 
-  response=$(
-    enable_interactive_timing \
-      "$timeout" \
-      " i The following dependencies will be installed locally if not found:\n * git, $DOCKER_PKG, docker-compose, python3, python3-pip, python3-venv" \
-      "y" \
-      "/tmp/homedock_auto_yes"
-  )
+  local response=$(enable_interactive_timing "$timeout" \
+    " ? Do you want to proceed? (Y/N) [Auto-Yes in $timeout seconds]:" \
+    "y")
 
   if [[ ! "$response" =~ ^[Yy]$ ]]; then
     clrf
