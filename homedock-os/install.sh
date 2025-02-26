@@ -84,41 +84,6 @@ detect_distro() {
   fi
 }
 
-# Enable interactive timing with a customizable timeout and temporary file
-enable_interactive_timing() {
-  local timeout=$1
-  local prompt_text=$2
-  local default_response=$3
-  local temp_file=${4:-/tmp/homedock_auto_yes}
-
-  clrf
-  printf "%s\n\n" "$prompt_text"
-
-  (
-    for ((i = timeout; i > 0; i--)); do
-      printf "\r ? Select an option (Y/N) [Auto-%s in %2d seconds]:" "$default_response" "$i"
-      sleep 1
-    done
-    echo "$default_response" >"$temp_file"
-  ) &
-
-  TIMER_PID=$!
-
-  read -r -n 1 response </dev/tty 2>/dev/null || true
-
-  kill $TIMER_PID 2>/dev/null
-  wait $TIMER_PID 2>/dev/null || true
-
-  if [[ -f "$temp_file" ]]; then
-    response=$(<"$temp_file")
-    rm "$temp_file"
-    printf "\n ⏰ Timeout reached. Auto-selecting '%s'...\n" "$default_response"
-  fi
-
-  clrf
-  echo "$response"
-}
-
 # Prompt user with timeout and countdown animation
 prompt_with_timeout() {
   local timeout=10
@@ -127,7 +92,7 @@ prompt_with_timeout() {
 
   for ((i = timeout; i > 0; i--)); do
     printf "\\r ? Do you want to proceed? (Y/N) [Auto-Yes in %2d seconds]:" "$i"
-    read -t 1 -n 1 response < /dev/tty && break
+    read -t 1 -n 1 response </dev/tty && break
   done
   printf "\\n"
 
