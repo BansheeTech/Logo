@@ -91,10 +91,12 @@ prompt_with_timeout() {
   printf " i The following dependencies will be installed locally if not found: \n * git, %s, docker-compose, python3, python3-pip, python3-venv\n\n" "$DOCKER_PKG"
 
   for ((i = timeout; i > 0; i--)); do
-    printf "\\r ? Do you want to proceed? (Y/N) [Auto-Yes in %2d seconds]:" "$i"
-    read -t 1 -n 1 response && break
+    printf "\r ? Do you want to proceed? (Y/N) [Auto-Yes in %2d seconds]:" "$i"
+    if read -t 1 -n 1 response </dev/tty; then
+      break
+    fi
   done
-  printf "\\n"
+  printf "\n"
 
   response=${response:-y}
   if [[ ! "$response" =~ ^[Yy]$ ]]; then
@@ -196,7 +198,9 @@ EOF
   clrf
   for ((i = timeout; i > 0; i--)); do
     printf "\r ? Do you want to install and enable the service? (Y/N) [Auto-Yes in %2d seconds]:" "$i"
-    read -t 1 -n 1 response && break
+    if read -t 1 -n 1 response </dev/tty; then
+      break
+    fi
   done
   printf "\n"
 
