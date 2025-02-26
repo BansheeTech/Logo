@@ -298,7 +298,7 @@ main() {
   check_network_connection
 
   local CURRENT_DIR=$(pwd)
-  printf " ✓ HomeDock OS Installation Path: %s\n" "$CURRENT_DIR"
+  printf " ✓ HomeDock OS Installation Path: %s\n" "$CURRENT_DIR"/HomeDockOS
 
   prompt_with_timeout
 
