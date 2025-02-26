@@ -1,5 +1,6 @@
 #!/bin/bash
-# HomeDock OS Installer 1.0.32
+# HomeDock OS Installer 1.0.32.228
+
 set -e
 
 # [===================================================================================================]
@@ -17,12 +18,12 @@ animate_blink() {
   local CMD=$2
   (eval "$CMD" >/dev/null 2>&1) &
   local CMD_PID=$!
-  local chars="/-\\|"
+  local chars="⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
   printf "%s " "$TEXT"
   while kill -0 $CMD_PID 2>/dev/null; do
     for ((i = 0; i < ${#chars}; i++)); do
       printf "\\r %s %s" "${chars:i:1}" "$TEXT"
-      sleep 0.1
+      sleep 0.07
     done
   done
   wait $CMD_PID
@@ -174,6 +175,11 @@ display_logo() {
    @@@@  @@@@   @@@                   
   @@@@  #@@@   @@@                    
  @@@@   @@@   @@@                     
+
+ Repo:    https://github.com/BansheeTech/HomeDockOS
+ Web:     https://www.homedock.cloud
+ Docs:    https://docs.homedock.cloud
+ Support: support@homedock.cloud
 
 EOF
   printf " ⌂ Installing HomeDock OS...\n"
