@@ -85,27 +85,40 @@ detect_distro() {
 }
 
 # Prompt user with timeout and countdown animation
-prompt_with_select() {
+prompt_with_timeout() {
+  local timeout=10
   clrf
   printf " i The following dependencies will be installed locally if not found:\n"
   printf " * git, %s, docker-compose, python3, python3-pip, python3-venv\n\n" "$DOCKER_PKG"
 
-  echo " ? Do you want to proceed? Select an option:"
-  select response in "Yes" "No"; do
-    case $response in
-    Yes)
-      printf " ✓ Proceeding with installation...\n"
-      break
-      ;;
-    No)
-      printf " ✗ Installation aborted by user.\n"
-      exit 1
-      ;;
-    *)
-      printf " ! Invalid option. Please select 1 or 2.\n"
-      ;;
-    esac
-  done </dev/tty
+  (
+    for ((i = timeout; i > 0; i--)); do
+      printf "\r ? Do you want to proceed? (Y/N) [Auto-Yes in %2d seconds]:" "$i"
+      sleep 1
+    done
+    echo "y" >/tmp/homedock_auto_yes
+  ) &
+
+  TIMER_PID=$!
+
+  read -r -n 1 response </dev/tty 2>/dev/null || true
+
+  kill $TIMER_PID 2>/dev/null
+  wait $TIMER_PID 2>/dev/null || true
+
+  if [[ -f /tmp/homedock_auto_yes ]]; then
+    response="y"
+    rm /tmp/homedock_auto_yes
+    printf "\n ⏰ Timeout reached. Auto-selecting 'Yes'...\n"
+  fi
+
+  clrf
+
+  if [[ ! "$response" =~ ^[Yy]$ ]]; then
+    clrf
+    printf " ! Installation aborted by user.\n\n"
+    exit 1
+  fi
 }
 
 # Check and install git
@@ -272,7 +285,7 @@ main() {
   local CURRENT_DIR=$(pwd)
   printf " ✓ HomeDock OS Installation Path: %s\n" "$CURRENT_DIR"
 
-  prompt_with_select
+  prompt_with_timeout
 
   install_git
 
