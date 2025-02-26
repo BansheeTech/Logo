@@ -143,6 +143,7 @@ install_pip_dependencies() {
 }
 
 display_logo() {
+  clear
   cat <<"EOF"
 
             @@@@@@@@@@@@@@@@@@@@@@@@  
