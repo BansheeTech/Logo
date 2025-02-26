@@ -86,24 +86,19 @@ detect_distro() {
 
 # Prompt user with timeout and countdown animation
 prompt_with_timeout() {
-  local timeout=10
   clrf
   printf " i The following dependencies will be installed locally if not found: \n * git, %s, docker-compose, python3, python3-pip, python3-venv\n\n" "$DOCKER_PKG"
 
-  for ((i = timeout; i > 0; i--)); do
-    printf "\r ? Do you want to proceed? (Y/N) [Auto-Yes in %2d seconds]:" "$i"
-    if read -t 1 -n 1 response </dev/tty; then
-      break
-    fi
-  done
-  printf "\n"
-
-  response=${response:-y}
-  if [[ ! "$response" =~ ^[Yy]$ ]]; then
-    clrf
-    printf " ! Installation aborted by user.\n\n"
-    exit 1
-  fi
+  select response in "Yes" "No"; do
+    case $response in
+    Yes) break ;;
+    No)
+      clrf
+      printf " ! Installation aborted by user.\n\n"
+      exit 1
+      ;;
+    esac
+  done < /dev/tty
 }
 
 # Check and install git
@@ -198,9 +193,7 @@ EOF
   clrf
   for ((i = timeout; i > 0; i--)); do
     printf "\r ? Do you want to install and enable the service? (Y/N) [Auto-Yes in %2d seconds]:" "$i"
-    if read -t 1 -n 1 response </dev/tty; then
-      break
-    fi
+    read -t 1 -n 1 response && break
   done
   printf "\n"
 
