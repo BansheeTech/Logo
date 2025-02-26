@@ -84,19 +84,22 @@ detect_distro() {
   fi
 }
 
-# Prompt user with timeout and countdown animation
-prompt_with_timeout() {
-  local timeout=10
+# Enable interactive timing with a customizable timeout and temporary file
+enable_interactive_timing() {
+  local timeout=$1
+  local prompt_text=$2
+  local default_response=$3
+  local temp_file=${4:-/tmp/homedock_auto_yes}
+
   clrf
-  printf " i The following dependencies will be installed locally if not found:\n"
-  printf " * git, %s, docker-compose, python3, python3-pip, python3-venv\n\n" "$DOCKER_PKG"
+  printf "%s\n\n" "$prompt_text"
 
   (
     for ((i = timeout; i > 0; i--)); do
-      printf "\r ? Do you want to proceed? (Y/N) [Auto-Yes in %2d seconds]:" "$i"
+      printf "\r ? Select an option (Y/N) [Auto-%s in %2d seconds]:" "$default_response" "$i"
       sleep 1
     done
-    echo "y" >/tmp/homedock_auto_yes
+    echo "$default_response" >"$temp_file"
   ) &
 
   TIMER_PID=$!
@@ -106,13 +109,28 @@ prompt_with_timeout() {
   kill $TIMER_PID 2>/dev/null
   wait $TIMER_PID 2>/dev/null || true
 
-  if [[ -f /tmp/homedock_auto_yes ]]; then
-    response="y"
-    rm /tmp/homedock_auto_yes
-    printf "\n ⏰ Timeout reached. Auto-selecting 'Yes'...\n"
+  if [[ -f "$temp_file" ]]; then
+    response=$(<"$temp_file")
+    rm "$temp_file"
+    printf "\n ! Timeout reached. Auto-selecting '%s'...\n" "$default_response"
   fi
 
   clrf
+  echo "$response"
+}
+
+# Prompt user with timeout and countdown animation
+prompt_with_timeout() {
+  local timeout=10
+  local response
+
+  response=$(
+    enable_interactive_timing \
+      "$timeout" \
+      " i The following dependencies will be installed locally if not found:\n * git, $DOCKER_PKG, docker-compose, python3, python3-pip, python3-venv" \
+      "y" \
+      "/tmp/homedock_auto_yes"
+  )
 
   if [[ ! "$response" =~ ^[Yy]$ ]]; then
     clrf
