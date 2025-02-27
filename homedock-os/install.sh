@@ -1,17 +1,19 @@
 #!/bin/bash
-# HomeDock OS Installer 1.0.32.228
+# HomeDock OS Installer 1.0.32.228-2
 
 # [===================================================================================================]
-#                                           Script Functions
+#                                            Script Functions
 # [===================================================================================================]
+
+((EUID)) && sugo="${sugo}" || sugo=""
 
 # Print a blank line :3
-clrf() {
+____CLRF____() {
   printf "\n"
 }
 
 # Spinner animation for background tasks
-animate_blink() {
+____ANIMATE_BLINK____() {
   local TEXT=$1
   local CMD=$2
   (eval "$CMD" >/dev/null 2>&1) &
@@ -21,7 +23,7 @@ animate_blink() {
   while kill -0 $CMD_PID 2>/dev/null; do
     for ((i = 0; i < ${#chars}; i++)); do
       printf "\\r %s %s" "${chars:i:1}" "$TEXT"
-      sleep 0.07
+      sleep 0.06
     done
   done
   wait $CMD_PID
@@ -29,49 +31,90 @@ animate_blink() {
 }
 
 # Check and install apt packages
-package_exists() {
+____PACKAGE_EXISTS____() {
   local package=$1
   local text=$2
 
   if dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -q "install ok installed"; then
     printf " ✓ %s is already installed\n" "$text"
   else
-    animate_blink "Installing $text..." "sudo apt-get install -y $package"
+    ____ANIMATE_BLINK____ "Installing $text..." "${sugo} ${PACKAGE_MANAGER} install -y $package"
   fi
 }
 
 # Detect distribution and set Docker package accordingly
-detect_distro() {
+____DETECT_DISTRO____() {
   local timeout=10
   if [ -f /etc/os-release ]; then
     . /etc/os-release
     printf " ✓ Detected Linux distribution: %s\n" "$PRETTY_NAME"
-    case "$ID" in
-    ubuntu) DOCKER_PKG="docker.io" ;;
-    debian) DOCKER_PKG="docker" ;;
-    *)
-      clrf
-      printf " ! This installer has been tested only on Debian and Ubuntu distributions.\n"
+
+    if [[ "$ID" != "debian" && "$ID" != "ubuntu" ]]; then
+      ____CLRF____
+      printf " ! This installer has been tested mainly on Debian and Ubuntu distributions.\n"
       printf " i The installation *may fail* or cause unexpected behavior.\n"
 
       for ((i = timeout; i > 0; i--)); do
         printf "\r ? Do you still want to continue? (Y/N) [Auto-No in %2d seconds]:" "$i"
         read -t 1 -n 1 response </dev/tty && break
       done
-      printf "\n"
+      ____CLRF____
 
       response=${response:-n}
-
       if [[ ! "$response" =~ ^[Yy]$ ]]; then
-        clrf
-        printf " x Installation aborted by user due to unsupported distribution.\n"
-        clrf
+        ____CLRF____
+        printf " x Installation aborted due to unknown distribution.\n"
+        ____CLRF____
         exit 1
       fi
+    fi
+
+    case "$ID" in
+    debian)
+      if [[ "$VERSION_ID" =~ ^(8|9|10)\. ]]; then
+        ____CLRF____
+        printf " ✗ Debian %s is not supported. Please use Debian 11 or later.\n" "$VERSION_ID"
+        ____CLRF____
+        exit 1
+      fi
+      PACKAGE_MANAGER="apt-get"
       DOCKER_PKG="docker"
-      clrf
+      COMPOSE_PKG="docker-compose"
+      ;;
+    ubuntu)
+      if [[ "$VERSION_ID" =~ ^(16|18|20)\. ]]; then
+        ____CLRF____
+        printf " ✗ Ubuntu %s is not supported. Please use Ubuntu 22.04 or later.\n" "$VERSION_ID"
+        ____CLRF____
+        exit 1
+      fi
+      PACKAGE_MANAGER="apt-get"
+      DOCKER_PKG="docker.io"
+      COMPOSE_PKG="docker-compose"
+      ;;
+    raspbian)
+      PACKAGE_MANAGER="apt-get"
+      DOCKER_PKG="docker.io"
+      COMPOSE_PKG="docker-compose"
+      ;;
+    centos)
+      PACKAGE_MANAGER="yum"
+      DOCKER_PKG="docker"
+      COMPOSE_PKG="docker-compose"
+      ;;
+    opensuse* | sles)
+      PACKAGE_MANAGER="zypper"
+      DOCKER_PKG="docker"
+      COMPOSE_PKG="docker-compose"
+      ;;
+    *)
+
+      PACKAGE_MANAGER="apt-get"
+      DOCKER_PKG="docker"
+      COMPOSE_PKG="docker-compose"
+      ____CLRF____
       printf " ✓ Proceeding with installation on unsupported distribution: %s\n" "$PRETTY_NAME"
-      clrf
+      ____CLRF____
       ;;
     esac
   else
@@ -82,27 +125,42 @@ detect_distro() {
       printf "\r ? Do you still want to continue? (Y/N) [Auto-No in %2d seconds]:" "$i"
       read -t 1 -n 1 response </dev/tty && break
     done
-    printf "\n"
+    ____CLRF____
 
     response=${response:-n}
-
     if [[ ! "$response" =~ ^[Yy]$ ]]; then
-      clrf
-      printf " x Installation aborted by user due to unknown distribution.\n"
-      clrf
+      ____CLRF____
+      printf " x Installation aborted due to unknown distribution.\n"
+      ____CLRF____
       exit 1
     fi
+
+    PACKAGE_MANAGER="apt-get"
     DOCKER_PKG="docker"
-    clrf
+    COMPOSE_PKG="docker-compose"
+
+    ____CLRF____
     printf " ✓ Proceeding with installation.\n"
+  fi
+  printf " ✓ Using default package manager: %s\n" "$PACKAGE_MANAGER"
+
+}
+
+# Verify package manager availability
+____VERIFY_PACKAGE_MANAGER____() {
+  if ! command -v "$PACKAGE_MANAGER" &>/dev/null; then
+    ____CLRF____
+    printf " ✗ Error: Detected package manager (%s) is not available on this system.\n" "$PACKAGE_MANAGER"
+    ____CLRF____
+    exit 1
   fi
 }
 
 # Prompt user with timeout and countdown animation
-prompt_with_timeout() {
+____PROMPT_WITH_TIMEOUT____() {
   local timeout=10
-  clrf
-  printf " i The following dependencies will be installed locally if not found: \n * git, %s, docker-compose, python3, python3-pip, python3-venv\n\n" "$DOCKER_PKG"
+  ____CLRF____
+  printf " i The following dependencies will be installed locally if not found: \n * git, %s, %s, python3, python3-pip, python3-venv\n\n" "$DOCKER_PKG" "$COMPOSE_PKG"
 
   for ((i = timeout; i > 0; i--)); do
     printf "\\r ? Do you want to proceed? (Y/N) [Auto-Yes in %2d seconds]:" "$i"
@@ -112,51 +170,56 @@ prompt_with_timeout() {
 
   response=${response:-y}
   if [[ ! "$response" =~ ^[Yy]$ ]]; then
-    clrf
+    ____CLRF____
     printf " ! Installation aborted by user.\n\n"
     exit 1
   fi
 }
 
 # Check and install git
-install_git() {
+____INSTAL_GIT____() {
   if ! command -v git &>/dev/null; then
-    animate_blink "Installing Git..." "sudo apt-get install -y git"
+    ____ANIMATE_BLINK____ "Installing Git..." "${sugo} ${PACKAGE_MANAGER} install -y git"
   else
     printf " ✓ Git is already installed\n"
   fi
 }
 
 # Check sudo availability
-check_sudo() {
-  if ! command -v sudo &>/dev/null; then
-    clrf
+____CHECK_SUDO____() {
+  if [[ -z "$sugo" ]]; then
+    return
+  fi
+
+  if ! command -v ${sugo} &>/dev/null; then
+    ____CLRF____
     printf " ✗ Error: sudo is not installed. Please install sudo and try again.\n"
     exit 1
   fi
-  if ! sudo -n true 2>/dev/null; then
-    clrf
+
+  if ! ${sugo} -n true 2>/dev/null; then
+    ____CLRF____
     printf " i You must have sudo privileges to run this script.\n"
-    sudo -v || exit 1
+    ${sugo} -v || exit 1
   fi
 }
 
-# Install pip dependencies with per-package feedback
-install_pip_dependencies() {
+# Install pip dependencies with package feedback
+____INSTALL_PIP_DEPS____() {
   if [ ! -f "requirements.txt" ]; then
-    clrf
+    ____CLRF____
     printf " ! requirements.txt not found. Ensure it exists in the HomeDockOS directory.\n"
     exit 1
   fi
 
   while IFS= read -r package || [ -n "$package" ]; do
     if [[ -n "$package" && ! "$package" =~ ^# ]]; then
-      animate_blink "Installing $package" "venv/bin/pip install $package"
+      ____ANIMATE_BLINK____ "Installing $package" "venv/bin/pip install $package"
     fi
   done <requirements.txt
 }
 
-display_logo() {
+____DISPLAY_LOGO____() {
   clear
   cat <<"EOF"
 
@@ -182,11 +245,11 @@ display_logo() {
 EOF
   printf " ⌂ Installing HomeDock OS...\n"
   printf " i Sit back and relax... It may take a while!\n"
-  clrf
+  ____CLRF____
 }
 
 # Prompt user and handle full service installation logic
-prompt_service_installation() {
+____PROMPT_SERVICE_INSTALLATION____() {
   local VENV_PATH=$1
   local WORK_DIR=$2
   local CURRENT_DIR=$3
@@ -213,32 +276,32 @@ Restart=always
 WantedBy=multi-user.target
 EOF
 
-  clrf
+  ____CLRF____
   for ((i = timeout; i > 0; i--)); do
     printf "\r ? Do you want to install and enable the service? (Y/N) [Auto-Yes in %2d seconds]:" "$i"
     read -t 1 -n 1 response </dev/tty && break
   done
-  printf "\n"
+  ____CLRF____
 
   response=${response:-y}
 
   if [[ "$response" =~ ^[Yy]$ ]]; then
-    clrf
+    ____CLRF____
     printf " i Copying service file to /etc/systemd/system/...\n"
-    sudo cp "$SERVICE_PATH" /etc/systemd/system/
-    sudo systemctl enable homedock.service
+    ${sugo} cp "$SERVICE_PATH" /etc/systemd/system/
+    ${sugo} systemctl enable homedock.service
     printf " ✓ HomeDock OS service has been enabled and will start at boot!\n"
   else
-    clrf
+    ____CLRF____
     printf " ! Skipping service installation as per user choice.\n"
     printf " i You can manually enable it later with:\n"
-    printf "     sudo cp \"$SERVICE_PATH\" /etc/systemd/system/\n"
-    printf "     sudo systemctl enable homedock.service && sudo systemctl start homedock.service\n"
+    printf "     ${sugo} cp \"$SERVICE_PATH\" /etc/systemd/system/\n"
+    printf "     ${sugo} systemctl enable homedock.service && ${sugo} systemctl start homedock.service\n"
   fi
 }
 
 # Verify Python virtual environment creation
-check_virtualenv_created() {
+____CHECK_VIRTUALENV_CREATED____() {
   local VENV_PATH=$1
   if [ ! -d "$VENV_PATH" ]; then
     printf " ! Error: Virtual environment creation failed at %s.\n" "$VENV_PATH"
@@ -247,7 +310,7 @@ check_virtualenv_created() {
 }
 
 # Verify network connection
-check_network_connection() {
+____CHECK_NETWORK_CONNECTION____() {
   if ! ping -c 1 github.com &>/dev/null; then
     printf " ! Error: No network connection. Please check your Internet.\n"
     exit 1
@@ -255,32 +318,32 @@ check_network_connection() {
 }
 
 # Handle git clone with animation
-handle_repo_clone() {
+____HANDLE_REPO_CLONE____() {
   local timeout=10
   if [ -d "HomeDockOS" ]; then
-    clrf
+    ____CLRF____
     printf " ! HomeDockOS directory already exists.\n"
 
     for ((i = timeout; i > 0; i--)); do
       printf "\r ? Do you want to re-create it? All data will be erased! (Y/N) [Auto-No in %2d seconds]:" "$i"
       read -t 1 -n 1 response </dev/tty && break
     done
-    printf "\n"
+    ____CLRF____
 
     response=${response:-n}
 
     if [[ "$response" =~ ^[Yy]$ ]]; then
       rm -rf HomeDockOS
-      animate_blink "Re-cloning HomeDock OS Repository from GitHub" \
+      ____ANIMATE_BLINK____ "Re-cloning HomeDock OS Repository from GitHub" \
         "git clone https://github.com/BansheeTech/HomeDockOS.git"
     else
-      clrf
+      ____CLRF____
       printf " ✗ Couldn't proceed because HomeDockOS folder already exists.\n"
-      clrf
+      ____CLRF____
       exit 1
     fi
   else
-    animate_blink "Downloading HomeDock OS Repository from GitHub" \
+    ____ANIMATE_BLINK____ "Downloading HomeDock OS Repository from GitHub" \
       "git clone https://github.com/BansheeTech/HomeDockOS.git"
   fi
 }
@@ -289,63 +352,64 @@ handle_repo_clone() {
 #                                             Main Logic
 # [===================================================================================================]
 
-main() {
-  display_logo
-  check_sudo
-  detect_distro
-  check_network_connection
+____MAIN____() {
+  ____DISPLAY_LOGO____
+  ____CHECK_SUDO____
+  ____DETECT_DISTRO____
+  ____VERIFY_PACKAGE_MANAGER____
+  ____CHECK_NETWORK_CONNECTION____
 
   local CURRENT_DIR=$(pwd)
   printf " ✓ HomeDock OS Installation Path: %s\n" "$CURRENT_DIR"/HomeDockOS
 
-  prompt_with_timeout
+  ____PROMPT_WITH_TIMEOUT____
 
-  install_git
+  ____INSTAL_GIT____
 
-  handle_repo_clone
+  ____HANDLE_REPO_CLONE____
 
   cd HomeDockOS || {
-    clrf
+    ____CLRF____
     printf " ✗ HomeDock OS folder not found\n"
     exit 1
   }
 
   printf " ✓ Switched to %s Directory...\n" "$(pwd)"
-  clrf
+  ____CLRF____
 
   printf " i Checking and installing apt dependencies...\n"
   for pkg in "$DOCKER_PKG" docker-compose python3 python3-pip python3-venv; do
-    package_exists "$pkg" "${pkg^}"
+    ____PACKAGE_EXISTS____ "$pkg" "${pkg^}"
   done
 
-  clrf
+  ____CLRF____
 
   local VENV_PATH="$(pwd)/venv"
   printf " i Python Virtual Environment Path: %s\n" "$VENV_PATH"
 
   printf " i Setting up Python virtual environment...\n"
-  [ ! -d "venv" ] && animate_blink "Creating Python virtual environment..." "python3 -m venv venv" || printf " ✓ Python virtual environment already exists\n"
-  clrf
+  [ ! -d "venv" ] && ____ANIMATE_BLINK____ "Creating Python virtual environment..." "python3 -m venv venv" || printf " ✓ Python virtual environment already exists\n"
+  ____CLRF____
 
-  check_virtualenv_created "$VENV_PATH"
+  ____CHECK_VIRTUALENV_CREATED____ "$VENV_PATH"
 
   if [ ! -f "requirements.txt" ]; then
-    clrf
+    ____CLRF____
     printf " ✗ requirements.txt not found. Ensure it exists in the HomeDockOS directory.\n"
     exit 1
   fi
 
   printf " i Installing Python dependencies...\n"
-  install_pip_dependencies
-  clrf
+  ____INSTALL_PIP_DEPS____
+  ____CLRF____
 
-  prompt_service_installation "$VENV_PATH" "$(pwd)" "$CURRENT_DIR"
+  ____PROMPT_SERVICE_INSTALLATION____ "$VENV_PATH" "$(pwd)" "$CURRENT_DIR"
 
-  clrf
+  ____CLRF____
   printf "\033[1;30;47m ✓ Running HomeDock OS for the first time! \033[0m\n"
-  clrf
+  ____CLRF____
 
-  sudo $VENV_PATH/bin/python3 "$(pwd)/homedock.py"
+  ${sugo} $VENV_PATH/bin/python3 "$(pwd)/homedock.py"
 }
 
-main
+____MAIN____
