@@ -78,7 +78,11 @@ ____DETECT_DISTRO____() {
         exit 1
       fi
       PACKAGE_MANAGER="apt-get"
-      DOCKER_PKG="docker"
+      if [[ "$VERSION_ID" == "13" ]] || [[ "$VERSION_ID" =~ ^13\. ]] || [[ "$VERSION_ID" -ge 13 ]]; then
+        DOCKER_PKG="docker.io"
+      else
+        DOCKER_PKG="docker"
+      fi
       COMPOSE_PKG="docker-compose"
       ;;
     ubuntu)
