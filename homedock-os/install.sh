@@ -1,5 +1,5 @@
 #!/bin/bash
-# HomeDock OS Installer 1.0.32.228-3
+# HomeDock OS Installer 1.0.40.100-trixiefix
 
 # [===================================================================================================]
 #                                            Script Functions
