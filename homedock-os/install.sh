@@ -241,10 +241,11 @@ ____DISPLAY_LOGO____() {
   @@@@  #@@@   @@@                    
  @@@@   @@@   @@@                     
 
- Repo:    https://github.com/BansheeTech/HomeDockOS
- Web:     https://www.homedock.cloud
- Docs:    https://docs.homedock.cloud
- Support: support@homedock.cloud
+ Repo:     https://github.com/BansheeTech/HomeDockOS
+ Web:      https://www.homedock.cloud
+ Docs:     https://docs.homedock.cloud
+ Discord:  https://discord.gg/Zj3JCYsRWw
+ Support:  support@homedock.cloud
 
 EOF
   printf " ⌂ Installing HomeDock OS...\n"
